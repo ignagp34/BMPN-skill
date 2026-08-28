@@ -141,6 +141,16 @@ describe("SVG rendering", () => {
     expect(withMarker.length).toBeGreaterThan(withoutMarker.length);
   });
 
+  it("draws edge labels after every shape so they are never painted over", async () => {
+    const layoutXml = await layoutFixture("canon-5-marriage");
+    const svg = await renderBpmnSvg(layoutXml);
+
+    const lastShape = svg.lastIndexOf('class="bpmn-shape ');
+    const firstEdgeLabel = svg.indexOf('class="bpmn-edge-label"');
+    expect(firstEdgeLabel).toBeGreaterThan(-1);
+    expect(firstEdgeLabel).toBeGreaterThan(lastShape);
+  });
+
   it("escapes XML metacharacters in labels", async () => {
     const { model } = parseDsl('Review <script> & "quotes"\nApprove\n');
     const svg = await renderBpmnSvg(await layoutBpmnXml(emitBpmnXml(model)));

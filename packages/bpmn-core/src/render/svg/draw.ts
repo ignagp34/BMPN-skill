@@ -431,7 +431,7 @@ function drawEvent(shape: SceneShape, theme: Theme): string {
 
   const filled = THROWING_EVENTS.has(shape.type);
   const glyph = eventGlyph(shape.eventDefinition, cx, cy, r * 0.85, filled, theme);
-  return rings.join("") + glyph + externalLabel(shape, theme);
+  return rings.join("") + glyph;
 }
 
 function drawGateway(shape: SceneShape, theme: Theme, alwaysShowExclusiveMarker: boolean): string {
@@ -496,7 +496,7 @@ function drawGateway(shape: SceneShape, theme: Theme, alwaysShowExclusiveMarker:
     ].join("");
   }
 
-  return diamond + marker + externalLabel(shape, theme);
+  return diamond + marker;
 }
 
 function drawDataObject(shape: SceneShape, theme: Theme): string {
@@ -518,7 +518,7 @@ function drawDataObject(shape: SceneShape, theme: Theme): string {
     "stroke-width": theme.strokeWidth,
     "stroke-linejoin": "round",
   })} />`;
-  return body + corner + externalLabel(shape, theme);
+  return body + corner;
 }
 
 function drawDataStore(shape: SceneShape, theme: Theme): string {
@@ -544,7 +544,7 @@ function drawDataStore(shape: SceneShape, theme: Theme): string {
         })} />`,
     )
     .join("");
-  return body + shelves + externalLabel(shape, theme);
+  return body + shelves;
 }
 
 function drawTextAnnotation(shape: SceneShape, theme: Theme): string {
@@ -647,6 +647,24 @@ export function drawShape(shape: SceneShape, options: DrawOptions): string {
 // Edges
 // ---------------------------------------------------------------------------
 
+/** Types whose label sits outside the shape and is drawn in the label pass. */
+const EXTERNALLY_LABELLED = new Set([
+  ...EVENT_TYPES,
+  ...GATEWAY_TYPES,
+  "DataObjectReference",
+  "DataStoreReference",
+]);
+
+/**
+ * Label for a shape that carries it outside its own outline.
+ *
+ * Drawn after every shape so a neighbouring task cannot paint over it.
+ */
+export function drawShapeLabel(shape: SceneShape, theme: Theme): string {
+  if (!EXTERNALLY_LABELLED.has(shape.type)) return "";
+  return externalLabel(shape, theme);
+}
+
 export function drawEdge(edge: SceneEdge, theme: Theme): string {
   const isMessage = edge.type === "MessageFlow";
   const isAssociation = edge.type === "Association" || edge.type === "DataInputAssociation" || edge.type === "DataOutputAssociation";
@@ -667,21 +685,27 @@ export function drawEdge(edge: SceneEdge, theme: Theme): string {
     "marker-start": isMessage ? "url(#bpmn-message-start)" : undefined,
   })} />`;
 
-  const group = (body: string): string =>
-    `<g${attrs({
-      class: `bpmn-edge bpmn-${edge.type}`,
-      "data-element-id": edge.id.length > 0 ? edge.id : undefined,
-    })}>${body}</g>`;
+  return `<g${attrs({
+    class: `bpmn-edge bpmn-${edge.type}`,
+    "data-element-id": edge.id.length > 0 ? edge.id : undefined,
+  })}>${line}</g>`;
+}
 
-  if (edge.name.length === 0) return group(line);
+/** Condition or message label of an edge, drawn on top of everything else. */
+export function drawEdgeLabel(edge: SceneEdge, theme: Theme): string {
+  if (edge.name.length === 0) return "";
 
   const box = edge.labelBounds;
   const lines = labelLines(edge.name, box !== undefined ? Math.max(box.width, 40) : 110, theme);
-  if (box !== undefined) {
-    return group(line + textBlock(lines, box.x + box.width / 2, box.y + box.height / 2, theme));
-  }
-  const mid = edge.waypoints[Math.floor(edge.waypoints.length / 2)];
-  return group(line + textBlock(lines, mid.x, mid.y - theme.lineHeight, theme));
+  const anchor =
+    box !== undefined
+      ? { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+      : (() => {
+          const mid = edge.waypoints[Math.floor(edge.waypoints.length / 2)];
+          return { x: mid.x, y: mid.y - theme.lineHeight };
+        })();
+
+  return `<g${attrs({ class: "bpmn-edge-label" })}>${textBlock(lines, anchor.x, anchor.y, theme)}</g>`;
 }
 
 /** Arrowheads and the message-flow source dot, in user space so they never scale oddly. */

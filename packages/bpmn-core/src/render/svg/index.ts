@@ -1,5 +1,5 @@
 import { buildScene, sceneBounds } from "./scene.js";
-import { drawEdge, drawShape, markerDefs } from "./draw.js";
+import { drawEdge, drawEdgeLabel, drawShape, drawShapeLabel, markerDefs } from "./draw.js";
 import { DARK_THEME, LIGHT_THEME, type Theme } from "./theme.js";
 
 export type { Theme } from "./theme.js";
@@ -52,15 +52,23 @@ export async function renderBpmnSvg(
   const viewWidth = Math.max(bounds.width + padding * 2, 1);
   const viewHeight = Math.max(bounds.height + padding * 2, 1);
 
+  const drawOptions = { theme, alwaysShowExclusiveMarker };
+  const isContainer = (shape: { type: string }): boolean =>
+    shape.type === "Participant" || shape.type === "Lane";
+
+  // Four passes, back to front. Labels that live outside their element go last,
+  // so a neighbouring shape can never paint over them.
   const body = [
-    ...scene.shapes
-      .filter((shape) => shape.type === "Participant" || shape.type === "Lane")
-      .map((shape) => drawShape(shape, { theme, alwaysShowExclusiveMarker })),
+    ...scene.shapes.filter(isContainer).map((shape) => drawShape(shape, drawOptions)),
     ...scene.edges.map((edge) => drawEdge(edge, theme)),
     ...scene.shapes
-      .filter((shape) => shape.type !== "Participant" && shape.type !== "Lane")
-      .map((shape) => drawShape(shape, { theme, alwaysShowExclusiveMarker })),
-  ].join("\n");
+      .filter((shape) => !isContainer(shape))
+      .map((shape) => drawShape(shape, drawOptions)),
+    ...scene.shapes.map((shape) => drawShapeLabel(shape, theme)),
+    ...scene.edges.map((edge) => drawEdgeLabel(edge, theme)),
+  ]
+    .filter((fragment) => fragment.length > 0)
+    .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${Math.round(

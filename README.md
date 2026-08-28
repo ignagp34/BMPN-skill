@@ -38,7 +38,8 @@ skills/
   bpmn/          the installable skill: SKILL.md + DSL spec + bundled binary
 prompts/
   processes/     the 15 synthetic reference processes, kept as evaluation fixtures
-scripts/         build and install
+examples/        a worked example: DSL in, SVG out
+scripts/         build, install, optional fidelity renderer
 ```
 
 ## Install
@@ -73,6 +74,16 @@ node skills/bpmn/bin/bpmn-render.mjs --dsl process.dsl --out bpmn-out --name onb
 
 It always prints one JSON object on stdout — output paths, parse errors and the
 validation report — so an agent can decide whether to retry.
+
+## Example
+
+[`examples/skill-flow.dsl`](examples/skill-flow.dsl) models the skill's own
+execution, retry loop included, and [`examples/skill-flow.svg`](examples/skill-flow.svg)
+is what the renderer makes of it:
+
+```bash
+node skills/bpmn/bin/bpmn-render.mjs --dsl examples/skill-flow.dsl --name skill-flow
+```
 
 ## Rendering, without a browser
 
