@@ -1,6 +1,13 @@
 import type { Bounds, EventDefinition, Point, SceneEdge, SceneShape } from "./scene.js";
 import type { Theme } from "./theme.js";
-import { escapeXml, measureText, wrapText } from "./text.js";
+import {
+  ANNOTATION_FONT_SIZE,
+  ANNOTATION_LINE_HEIGHT,
+  annotationContentWidth,
+  escapeXml,
+  measureText,
+  wrapText,
+} from "./text.js";
 
 /**
  * Glyph library for the headless renderer.
@@ -43,7 +50,7 @@ const GATEWAY_TYPES = new Set([
 /** Events that *throw* render their definition glyph filled, not outlined. */
 const THROWING_EVENTS = new Set(["EndEvent", "IntermediateThrowEvent"]);
 
-const POOL_HEADER_WIDTH = 30;
+export const POOL_HEADER_WIDTH = 30;
 
 function attrs(map: Record<string, string | number | undefined>): string {
   const parts: string[] = [];
@@ -555,8 +562,17 @@ function drawTextAnnotation(shape: SceneShape, theme: Theme): string {
     stroke: theme.stroke,
     "stroke-width": theme.strokeWidth,
   })} />`;
-  const lines = labelLines(shape.name, bounds.width - 14, theme);
-  const label = textBlock(lines, bounds.x + 6, bounds.y + bounds.height / 2, theme, "start");
+
+  // Wrap against the same content width the layout pass sized the box with, so
+  // the text fills the bracket instead of spilling out of it.
+  const lines = wrapText(shape.name, annotationContentWidth(bounds.width), ANNOTATION_FONT_SIZE);
+  const label = textBlock(
+    lines,
+    bounds.x + 14,
+    bounds.y + bounds.height / 2,
+    { ...theme, fontSize: ANNOTATION_FONT_SIZE, lineHeight: ANNOTATION_LINE_HEIGHT },
+    "start",
+  );
   return bracket + label;
 }
 
@@ -595,19 +611,52 @@ function drawContainer(shape: SceneShape, theme: Theme): string {
   return body + header + label;
 }
 
+/**
+ * Horizontal span a label may occupy — the interior of the pool or lane the
+ * element sits in.
+ */
+export interface LabelBand {
+  left: number;
+  right: number;
+}
+
+/**
+ * Keep a centred label inside `band`.
+ *
+ * An event sitting at the left edge of a lane has a label far wider than its
+ * 36 px circle, and centring it blindly pushes the text over the lane's name
+ * strip. Slide it back instead. A label too wide for the band is pinned to the
+ * left edge: overflowing into open canvas beats overwriting the lane header.
+ */
+function clampLabelCentre(centre: number, width: number, band: LabelBand | undefined): number {
+  if (band === undefined) return centre;
+  const half = width / 2;
+  if (band.right - band.left <= width) return band.left + half;
+  return Math.min(Math.max(centre, band.left + half), band.right - half);
+}
+
+function widestLine(lines: string[], theme: Theme): number {
+  return lines.reduce((widest, line) => Math.max(widest, measureText(line, theme.fontSize)), 0);
+}
+
 /** Label placed outside the shape: uses the DI label box when the layout set one. */
-function externalLabel(shape: SceneShape, theme: Theme): string {
+function externalLabel(shape: SceneShape, theme: Theme, band?: LabelBand): string {
   if (shape.name.length === 0) return "";
   const box = shape.labelBounds;
   if (box !== undefined) {
     const lines = labelLines(shape.name, Math.max(box.width, 40), theme);
-    return textBlock(lines, box.x + box.width / 2, box.y + box.height / 2, theme);
+    const centre = clampLabelCentre(box.x + box.width / 2, widestLine(lines, theme), band);
+    return textBlock(lines, centre, box.y + box.height / 2, theme);
   }
   const maxWidth = Math.max(shape.bounds.width * 2.6, 90);
   const lines = labelLines(shape.name, maxWidth, theme);
-  const cx = shape.bounds.x + shape.bounds.width / 2;
+  const centre = clampLabelCentre(
+    shape.bounds.x + shape.bounds.width / 2,
+    widestLine(lines, theme),
+    band,
+  );
   const top = shape.bounds.y + shape.bounds.height + 6 + theme.lineHeight / 2;
-  return textBlock(lines, cx, top + ((lines.length - 1) * theme.lineHeight) / 2, theme);
+  return textBlock(lines, centre, top + ((lines.length - 1) * theme.lineHeight) / 2, theme);
 }
 
 export interface DrawOptions {
@@ -660,9 +709,14 @@ const EXTERNALLY_LABELLED = new Set([
  *
  * Drawn after every shape so a neighbouring task cannot paint over it.
  */
-export function drawShapeLabel(shape: SceneShape, theme: Theme): string {
+export function drawShapeLabel(shape: SceneShape, theme: Theme, band?: LabelBand): string {
   if (!EXTERNALLY_LABELLED.has(shape.type)) return "";
-  return externalLabel(shape, theme);
+  const label = externalLabel(shape, theme, band);
+  if (label.length === 0) return "";
+  return `<g${attrs({
+    class: "bpmn-shape-label",
+    "data-element-id": shape.id.length > 0 ? shape.id : undefined,
+  })}>${label}</g>`;
 }
 
 export function drawEdge(edge: SceneEdge, theme: Theme): string {

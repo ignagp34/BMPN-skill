@@ -1,4 +1,5 @@
 import BpmnModdle from "bpmn-moddle";
+import { measureAnnotation } from "./svg/text.js";
 
 const DATA_REF_TYPES = new Set(["bpmn:DataObjectReference", "bpmn:DataStoreReference"]);
 const ARTIFACT_TYPES = new Set([...DATA_REF_TYPES, "bpmn:TextAnnotation"]);
@@ -9,8 +10,6 @@ const DATA_W = 36;
 const DATA_H = 50;
 const STORE_W = 50;
 const STORE_H = 50;
-const ANNOTATION_W = 140;
-const ANNOTATION_H = 40;
 const ARTIFACT_GAP = 24;
 const DEFAULT_SEARCH_STEP = 48;
 const DEFAULT_SEARCH_RINGS = 4;
@@ -128,7 +127,7 @@ export async function placeArtifacts(layoutXml: string): Promise<string> {
       .filter((entry): entry is { id: string; bounds: Bounds } => entry.bounds !== undefined);
     if (connectedShapes.length === 0) continue;
 
-    const dims = artifactDims(group.artifact.$type);
+    const dims = artifactDims(group.artifact);
     const participantBounds = group.participantId ? participantBoundsById.get(group.participantId) : undefined;
     const obstacleShapes = [
       ...blockingShapes,
@@ -248,8 +247,8 @@ function collectArtifactGroups(defs: any, participantByElementId: Map<string, st
 }
 
 function compareArtifactGroups(a: ArtifactGroup, b: ArtifactGroup): number {
-  const aDims = artifactDims(a.artifact.$type);
-  const bDims = artifactDims(b.artifact.$type);
+  const aDims = artifactDims(a.artifact);
+  const bDims = artifactDims(b.artifact);
   return (
     b.attachedNodeIds.length - a.attachedNodeIds.length ||
     bDims.width * bDims.height - aDims.width * aDims.height ||
@@ -684,9 +683,24 @@ function totalLength(points: Pt[]): number {
   return total;
 }
 
-function artifactDims($type: string): { width: number; height: number } {
-  if ($type === "bpmn:DataStoreReference") return { width: STORE_W, height: STORE_H };
-  if ($type === "bpmn:TextAnnotation") return { width: ANNOTATION_W, height: ANNOTATION_H };
+/**
+ * Footprint an artifact needs on the canvas.
+ *
+ * Data objects and stores have fixed BPMN dimensions. A text annotation is
+ * sized to its own text with the same metric the renderer uses to lay that text
+ * out, so the bracket always matches what is written inside it — a fixed box
+ * would crop a long note and leave a short one swimming in whitespace.
+ */
+function artifactDims(artifact: { $type: string; text?: unknown }): {
+  width: number;
+  height: number;
+} {
+  if (artifact.$type === "bpmn:DataStoreReference") return { width: STORE_W, height: STORE_H };
+  if (artifact.$type === "bpmn:TextAnnotation") {
+    const text = typeof artifact.text === "string" ? artifact.text : "";
+    const { width, height } = measureAnnotation(text);
+    return { width, height };
+  }
   return { width: DATA_W, height: DATA_H };
 }
 

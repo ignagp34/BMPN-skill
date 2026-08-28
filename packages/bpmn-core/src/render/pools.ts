@@ -204,11 +204,20 @@ export async function placePoolsAndLanes(layoutXml: string): Promise<string> {
     if (lanesWithShapes.length === 0) continue;
     const firstLane = lanesWithShapes[0].bounds!;
     const lastLane = lanesWithShapes[lanesWithShapes.length - 1].bounds!;
+
+    // The participant is LANE_PAD_Y taller than the lane stack at each end.
+    // Left as-is that padding shows up as a strip of bare pool above the first
+    // lane and below the last one — lanes must tile their participant
+    // completely, so grow the outer lanes into it instead.
+    firstLane.y -= LANE_PAD_Y;
+    firstLane.height += LANE_PAD_Y;
+    lastLane.height += LANE_PAD_Y;
+
     p.bounds = {
       x: interiorX - HEADER_W,
-      y: firstLane.y - LANE_PAD_Y,
+      y: firstLane.y,
       width: interiorW + HEADER_W,
-      height: lastLane.y + lastLane.height - firstLane.y + 2 * LANE_PAD_Y,
+      height: lastLane.y + lastLane.height - firstLane.y,
     };
     cursorY = p.bounds.y + p.bounds.height + POOL_GAP;
   }

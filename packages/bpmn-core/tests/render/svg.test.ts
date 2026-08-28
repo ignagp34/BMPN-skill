@@ -9,7 +9,7 @@ import { parseDsl } from "../../src/dsl/index.js";
 import { layoutBpmnXml } from "../../src/render/pipeline.js";
 import { buildScene, sceneBounds } from "../../src/render/svg/scene.js";
 import { renderBpmnSvg } from "../../src/render/svg/index.js";
-import { measureText, wrapText } from "../../src/render/svg/text.js";
+import { measureAnnotation, measureText, wrapText } from "../../src/render/svg/text.js";
 
 const fixturesDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 
@@ -87,6 +87,61 @@ describe("scene extraction", () => {
     }
   });
 
+  it("tiles every participant completely with its lanes", async () => {
+    for (const fixture of ["canon-1-cheeseburger", "canon-5-marriage"]) {
+      const scene = await buildScene(await layoutFixture(fixture));
+      const participants = scene.shapes.filter((shape) => shape.type === "Participant");
+      expect(participants.length, fixture).toBeGreaterThan(0);
+
+      for (const participant of participants) {
+        const lanes = scene.shapes
+          .filter(
+            (shape) =>
+              shape.type === "Lane" &&
+              shape.bounds.y >= participant.bounds.y - 1 &&
+              shape.bounds.y + shape.bounds.height <=
+                participant.bounds.y + participant.bounds.height + 1,
+          )
+          .sort((a, b) => a.bounds.y - b.bounds.y);
+        if (lanes.length === 0) continue;
+
+        const label = `${fixture} / ${participant.name}`;
+        expect(lanes[0].bounds.y, label).toBeCloseTo(participant.bounds.y, 5);
+
+        const last = lanes[lanes.length - 1];
+        expect(last.bounds.y + last.bounds.height, label).toBeCloseTo(
+          participant.bounds.y + participant.bounds.height,
+          5,
+        );
+
+        // No gap between consecutive lanes either.
+        for (let i = 1; i < lanes.length; i += 1) {
+          expect(lanes[i].bounds.y, label).toBeCloseTo(
+            lanes[i - 1].bounds.y + lanes[i - 1].bounds.height,
+            5,
+          );
+        }
+      }
+    }
+  });
+
+  it("sizes every text annotation to the text it holds", async () => {
+    const scene = await buildScene(await layoutFixture("canon-5-marriage"));
+    const annotations = scene.shapes.filter((shape) => shape.type === "TextAnnotation");
+    expect(annotations.length).toBeGreaterThan(0);
+
+    const heights = new Set<number>();
+    for (const annotation of annotations) {
+      const expected = measureAnnotation(annotation.name);
+      expect(annotation.bounds.width, annotation.name).toBe(expected.width);
+      expect(annotation.bounds.height, annotation.name).toBe(expected.height);
+      heights.add(annotation.bounds.height);
+    }
+
+    // Notes of different lengths must not all end up the same fixed box.
+    expect(heights.size).toBeGreaterThan(1);
+  });
+
   it("rejects XML without diagram interchange", async () => {
     const { model } = parseDsl("Place Order\nShip Order\n");
     await expect(buildScene(emitBpmnXml(model))).rejects.toThrow(/diagram interchange/i);
@@ -149,6 +204,48 @@ describe("SVG rendering", () => {
     const firstEdgeLabel = svg.indexOf('class="bpmn-edge-label"');
     expect(firstEdgeLabel).toBeGreaterThan(-1);
     expect(firstEdgeLabel).toBeGreaterThan(lastShape);
+  });
+
+  it("keeps an event's label out of its lane's name strip", async () => {
+    // A start event sits flush against the lane's left edge, and its label is
+    // far wider than the 36 px circle. Centred blindly it lands on the lane
+    // header; this is the regression guard for that.
+    const layoutXml = await layoutFixture("canon-1-cheeseburger");
+    const scene = await buildScene(layoutXml);
+    const svg = await renderBpmnSvg(layoutXml);
+
+    const start = scene.shapes.find((shape) => shape.type === "StartEvent");
+    expect(start).toBeDefined();
+
+    const lane = scene.shapes
+      .filter((shape) => shape.type === "Lane")
+      .find(
+        (shape) =>
+          start!.bounds.x >= shape.bounds.x &&
+          start!.bounds.y >= shape.bounds.y &&
+          start!.bounds.y <= shape.bounds.y + shape.bounds.height,
+      );
+    expect(lane).toBeDefined();
+
+    const group = new RegExp(
+      `<g class="bpmn-shape-label" data-element-id="${start!.id}">(.*?)</g>`,
+      "s",
+    ).exec(svg);
+    expect(group).not.toBeNull();
+
+    const centres = Array.from(group![1].matchAll(/<tspan x="(-?[\d.]+)"/g)).map((match) =>
+      Number(match[1]),
+    );
+    expect(centres.length).toBeGreaterThan(0);
+
+    // Half the widest rendered line must clear the 30 px header strip.
+    const halfWidth =
+      Math.max(...wrapText(start!.name, Math.max(start!.bounds.width * 2.6, 90), 12).map((line) =>
+        measureText(line, 12),
+      )) / 2;
+    for (const centre of centres) {
+      expect(centre - halfWidth).toBeGreaterThanOrEqual(lane!.bounds.x + 30);
+    }
   });
 
   it("escapes XML metacharacters in labels", async () => {

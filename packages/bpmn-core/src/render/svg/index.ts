@@ -1,5 +1,13 @@
 import { buildScene, sceneBounds } from "./scene.js";
-import { drawEdge, drawEdgeLabel, drawShape, drawShapeLabel, markerDefs } from "./draw.js";
+import {
+  drawEdge,
+  drawEdgeLabel,
+  drawShape,
+  drawShapeLabel,
+  markerDefs,
+  POOL_HEADER_WIDTH,
+  type LabelBand,
+} from "./draw.js";
 import { DARK_THEME, LIGHT_THEME, type Theme } from "./theme.js";
 
 export type { Theme } from "./theme.js";
@@ -56,6 +64,32 @@ export async function renderBpmnSvg(
   const isContainer = (shape: { type: string }): boolean =>
     shape.type === "Participant" || shape.type === "Lane";
 
+  const containers = scene.shapes.filter(isContainer);
+
+  /**
+   * Innermost pool or lane holding this shape, minus its name strip. Labels are
+   * kept inside it so they cannot land on top of a lane header.
+   */
+  const bandFor = (shape: { bounds: { x: number; y: number; width: number; height: number } }):
+    | LabelBand
+    | undefined => {
+    const centre = {
+      x: shape.bounds.x + shape.bounds.width / 2,
+      y: shape.bounds.y + shape.bounds.height / 2,
+    };
+    let best: LabelBand | undefined;
+    let bestArea = Number.POSITIVE_INFINITY;
+    for (const container of containers) {
+      const { x, y, width, height } = container.bounds;
+      if (centre.x < x || centre.x > x + width || centre.y < y || centre.y > y + height) continue;
+      const area = width * height;
+      if (area >= bestArea) continue;
+      bestArea = area;
+      best = { left: x + POOL_HEADER_WIDTH + 2, right: x + width - 2 };
+    }
+    return best;
+  };
+
   // Four passes, back to front. Labels that live outside their element go last,
   // so a neighbouring shape can never paint over them.
   const body = [
@@ -64,7 +98,7 @@ export async function renderBpmnSvg(
     ...scene.shapes
       .filter((shape) => !isContainer(shape))
       .map((shape) => drawShape(shape, drawOptions)),
-    ...scene.shapes.map((shape) => drawShapeLabel(shape, theme)),
+    ...scene.shapes.map((shape) => drawShapeLabel(shape, theme, bandFor(shape))),
     ...scene.edges.map((edge) => drawEdgeLabel(edge, theme)),
   ]
     .filter((fragment) => fragment.length > 0)

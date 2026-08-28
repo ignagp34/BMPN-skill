@@ -102,3 +102,42 @@ export function escapeXml(value: string): string {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 }
+
+// ---------------------------------------------------------------------------
+// Text annotation sizing
+// ---------------------------------------------------------------------------
+
+/**
+ * Geometry of a BPMN text annotation, shared by the layout pass that sizes the
+ * shape and the renderer that fills it.
+ *
+ * Both sides must agree, or the bracket ends up too big for a short note and
+ * too small for a long one. `ANNOTATION_CONTENT_INSET` is the horizontal space
+ * the bracket and its gutter take from the box.
+ */
+export const ANNOTATION_FONT_SIZE = 12;
+export const ANNOTATION_LINE_HEIGHT = 14;
+export const ANNOTATION_CONTENT_INSET = 20;
+export const ANNOTATION_PADDING_Y = 8;
+export const ANNOTATION_MIN_WIDTH = 90;
+export const ANNOTATION_MAX_WIDTH = 150;
+export const ANNOTATION_MIN_HEIGHT = 30;
+
+/** Width available for text inside an annotation box of the given width. */
+export function annotationContentWidth(boxWidth: number): number {
+  return Math.max(boxWidth - ANNOTATION_CONTENT_INSET, 20);
+}
+
+/** Box that fits `text` snugly, wrapping at `ANNOTATION_MAX_WIDTH`. */
+export function measureAnnotation(text: string): { width: number; height: number; lines: string[] } {
+  const oneLine = measureText(text, ANNOTATION_FONT_SIZE) + ANNOTATION_CONTENT_INSET;
+  const width = Math.round(
+    Math.min(Math.max(oneLine, ANNOTATION_MIN_WIDTH), ANNOTATION_MAX_WIDTH),
+  );
+  const lines = wrapText(text, annotationContentWidth(width), ANNOTATION_FONT_SIZE);
+  const height = Math.max(
+    ANNOTATION_MIN_HEIGHT,
+    lines.length * ANNOTATION_LINE_HEIGHT + 2 * ANNOTATION_PADDING_Y,
+  );
+  return { width, height, lines };
+}
