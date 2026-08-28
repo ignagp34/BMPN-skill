@@ -135,3 +135,43 @@ describe("emitBpmnXml — message end event", () => {
     await expect(importViaModdle(xml)).resolves.toBeUndefined();
   });
 });
+
+describe("pools the author never wrote", () => {
+  const noPools = "Place order\nPay\nShip order\n";
+  const withPools = "Customer: Place order\nShop: Ship order\n";
+
+  it("emits a plain process, with no collaboration, participant or lane", async () => {
+    const { model } = parseDsl(noPools);
+    expect(model.syntheticPool).toBe(true);
+
+    const xml = emitBpmnXml(model);
+    expect(xml).not.toContain("bpmn:collaboration");
+    expect(xml).not.toContain("bpmn:participant");
+    expect(xml).not.toContain("bpmn:laneSet");
+    // Element ids may still carry the slug — they are opaque and never shown.
+    // What must not survive is the invented pool as a *visible* name.
+    expect(xml).not.toContain('name="Pool_1"');
+    expect(xml).toContain("<bpmn:process");
+    await expect(importViaModdle(xml)).resolves.toBeUndefined();
+  });
+
+  it("still emits the collaboration when the author did name a pool", async () => {
+    const { model } = parseDsl(withPools);
+    expect(model.syntheticPool).toBeFalsy();
+
+    const xml = emitBpmnXml(model);
+    expect(xml).toContain("bpmn:collaboration");
+    expect(xml).toContain("bpmn:participant");
+    expect(xml).toContain("bpmn:laneSet");
+    await expect(importViaModdle(xml)).resolves.toBeUndefined();
+  });
+
+  it("keeps every flow node when the lane set is dropped", () => {
+    const { model } = parseDsl(noPools);
+    const xml = emitBpmnXml(model);
+    for (const name of ["Place order", "Pay", "Ship order"]) {
+      expect(xml).toContain(name);
+    }
+    expect((xml.match(/<bpmn:sequenceFlow/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+});

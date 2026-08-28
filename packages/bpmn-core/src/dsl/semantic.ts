@@ -894,6 +894,7 @@ function build(
     errors,
     declaredPools: program.declaredPools,
     crossPoolControlFlows,
+    syntheticPool: program.syntheticPool,
   };
 }
 

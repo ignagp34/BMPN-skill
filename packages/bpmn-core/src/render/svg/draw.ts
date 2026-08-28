@@ -639,24 +639,94 @@ function widestLine(lines: string[], theme: Theme): number {
   return lines.reduce((widest, line) => Math.max(widest, measureText(line, theme.fontSize)), 0);
 }
 
-/** Label placed outside the shape: uses the DI label box when the layout set one. */
-function externalLabel(shape: SceneShape, theme: Theme, band?: LabelBand): string {
-  if (shape.name.length === 0) return "";
+interface TextPlacement {
+  lines: string[];
+  /** Horizontal centre of the text block. */
+  centre: number;
+  /** Vertical centre of the text block. */
+  middle: number;
+  width: number;
+  height: number;
+}
+
+function placement(lines: string[], centre: number, middle: number, theme: Theme): TextPlacement {
+  return {
+    lines,
+    centre,
+    middle,
+    width: widestLine(lines, theme),
+    height: lines.length * theme.lineHeight,
+  };
+}
+
+/**
+ * Where a shape's outside label lands: from the DI label box when the layout
+ * pass set one, otherwise centred just below the shape.
+ *
+ * Returned rather than drawn directly so the caller can also fold it into the
+ * diagram's bounding box — an auto-placed label is wider than the event it
+ * belongs to and would otherwise be cropped at the canvas edge.
+ */
+function placeExternalLabel(
+  shape: SceneShape,
+  theme: Theme,
+  band?: LabelBand,
+): TextPlacement | null {
+  if (shape.name.length === 0) return null;
+
   const box = shape.labelBounds;
   if (box !== undefined) {
     const lines = labelLines(shape.name, Math.max(box.width, 40), theme);
     const centre = clampLabelCentre(box.x + box.width / 2, widestLine(lines, theme), band);
-    return textBlock(lines, centre, box.y + box.height / 2, theme);
+    return placement(lines, centre, box.y + box.height / 2, theme);
   }
-  const maxWidth = Math.max(shape.bounds.width * 2.6, 90);
-  const lines = labelLines(shape.name, maxWidth, theme);
+
+  const lines = labelLines(shape.name, Math.max(shape.bounds.width * 2.6, 90), theme);
   const centre = clampLabelCentre(
     shape.bounds.x + shape.bounds.width / 2,
     widestLine(lines, theme),
     band,
   );
   const top = shape.bounds.y + shape.bounds.height + 6 + theme.lineHeight / 2;
-  return textBlock(lines, centre, top + ((lines.length - 1) * theme.lineHeight) / 2, theme);
+  return placement(lines, centre, top + ((lines.length - 1) * theme.lineHeight) / 2, theme);
+}
+
+function placeEdgeLabel(edge: SceneEdge, theme: Theme): TextPlacement | null {
+  if (edge.name.length === 0) return null;
+
+  const box = edge.labelBounds;
+  const lines = labelLines(edge.name, box !== undefined ? Math.max(box.width, 40) : 110, theme);
+  if (box !== undefined) {
+    return placement(lines, box.x + box.width / 2, box.y + box.height / 2, theme);
+  }
+  const mid = edge.waypoints[Math.floor(edge.waypoints.length / 2)];
+  return placement(lines, mid.x, mid.y - theme.lineHeight, theme);
+}
+
+function toBox(place: TextPlacement): Bounds {
+  return {
+    x: place.centre - place.width / 2,
+    y: place.middle - place.height / 2,
+    width: place.width,
+    height: place.height,
+  };
+}
+
+/** Area a shape's outside label occupies, for bounding-box purposes. */
+export function externalLabelBox(
+  shape: SceneShape,
+  theme: Theme,
+  band?: LabelBand,
+): Bounds | undefined {
+  if (!EXTERNALLY_LABELLED.has(shape.type)) return undefined;
+  const place = placeExternalLabel(shape, theme, band);
+  return place === null ? undefined : toBox(place);
+}
+
+/** Area an edge's label occupies, for bounding-box purposes. */
+export function edgeLabelBox(edge: SceneEdge, theme: Theme): Bounds | undefined {
+  const place = placeEdgeLabel(edge, theme);
+  return place === null ? undefined : toBox(place);
 }
 
 export interface DrawOptions {
@@ -711,12 +781,12 @@ const EXTERNALLY_LABELLED = new Set([
  */
 export function drawShapeLabel(shape: SceneShape, theme: Theme, band?: LabelBand): string {
   if (!EXTERNALLY_LABELLED.has(shape.type)) return "";
-  const label = externalLabel(shape, theme, band);
-  if (label.length === 0) return "";
+  const place = placeExternalLabel(shape, theme, band);
+  if (place === null) return "";
   return `<g${attrs({
     class: "bpmn-shape-label",
     "data-element-id": shape.id.length > 0 ? shape.id : undefined,
-  })}>${label}</g>`;
+  })}>${textBlock(place.lines, place.centre, place.middle, theme)}</g>`;
 }
 
 export function drawEdge(edge: SceneEdge, theme: Theme): string {
@@ -747,19 +817,14 @@ export function drawEdge(edge: SceneEdge, theme: Theme): string {
 
 /** Condition or message label of an edge, drawn on top of everything else. */
 export function drawEdgeLabel(edge: SceneEdge, theme: Theme): string {
-  if (edge.name.length === 0) return "";
-
-  const box = edge.labelBounds;
-  const lines = labelLines(edge.name, box !== undefined ? Math.max(box.width, 40) : 110, theme);
-  const anchor =
-    box !== undefined
-      ? { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-      : (() => {
-          const mid = edge.waypoints[Math.floor(edge.waypoints.length / 2)];
-          return { x: mid.x, y: mid.y - theme.lineHeight };
-        })();
-
-  return `<g${attrs({ class: "bpmn-edge-label" })}>${textBlock(lines, anchor.x, anchor.y, theme)}</g>`;
+  const place = placeEdgeLabel(edge, theme);
+  if (place === null) return "";
+  return `<g${attrs({ class: "bpmn-edge-label" })}>${textBlock(
+    place.lines,
+    place.centre,
+    place.middle,
+    theme,
+  )}</g>`;
 }
 
 /** Arrowheads and the message-flow source dot, in user space so they never scale oddly. */

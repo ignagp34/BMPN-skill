@@ -1,9 +1,11 @@
-import { buildScene, sceneBounds } from "./scene.js";
+import { buildScene, sceneBounds, unionBounds, type Bounds } from "./scene.js";
 import {
   drawEdge,
   drawEdgeLabel,
   drawShape,
   drawShapeLabel,
+  edgeLabelBox,
+  externalLabelBox,
   markerDefs,
   POOL_HEADER_WIDTH,
   type LabelBand,
@@ -51,14 +53,6 @@ export async function renderBpmnSvg(
   const alwaysShowExclusiveMarker = options.alwaysShowExclusiveMarker ?? true;
 
   const scene = await buildScene(layoutXml);
-  const bounds = sceneBounds(scene);
-
-  // Labels placed under events can spill past the shape box; widen the canvas
-  // rather than clip them.
-  const viewX = bounds.x - padding;
-  const viewY = bounds.y - padding;
-  const viewWidth = Math.max(bounds.width + padding * 2, 1);
-  const viewHeight = Math.max(bounds.height + padding * 2, 1);
 
   const drawOptions = { theme, alwaysShowExclusiveMarker };
   const isContainer = (shape: { type: string }): boolean =>
@@ -89,6 +83,25 @@ export async function renderBpmnSvg(
     }
     return best;
   };
+
+  // An auto-placed label is wider than the event it belongs to, so the canvas
+  // must be sized around the labels as well as the shapes — otherwise the text
+  // under a start event on the left edge is cropped in half.
+  const labelBoxes: Bounds[] = [];
+  for (const shape of scene.shapes) {
+    const box = externalLabelBox(shape, theme, bandFor(shape));
+    if (box !== undefined) labelBoxes.push(box);
+  }
+  for (const edge of scene.edges) {
+    const box = edgeLabelBox(edge, theme);
+    if (box !== undefined) labelBoxes.push(box);
+  }
+  const bounds = unionBounds(sceneBounds(scene), labelBoxes);
+
+  const viewX = bounds.x - padding;
+  const viewY = bounds.y - padding;
+  const viewWidth = Math.max(bounds.width + padding * 2, 1);
+  const viewHeight = Math.max(bounds.height + padding * 2, 1);
 
   // Four passes, back to front. Labels that live outside their element go last,
   // so a neighbouring shape can never paint over them.

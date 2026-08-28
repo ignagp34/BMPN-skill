@@ -307,11 +307,16 @@ export function parse(source: string): Program {
     traces.push(built.trace);
   }
 
+  // Nothing in the source named a pool. Everything downstream assumes each node
+  // belongs to one, so invent a single container — and flag it, so the emitter
+  // knows it is scaffolding rather than a swimlane the author asked for.
+  let syntheticPool = false;
   if (pools.length === 0) {
     const fallbackPool = "Pool_1";
     for (const trace of traces) applyFallbackPoolToTrace(trace, fallbackPool);
     pools.push({ name: fallbackPool, firstSeenLine: 1 });
+    syntheticPool = true;
   }
 
-  return { pools, traces, errors, declaredPools: lex.declaredPools };
+  return { pools, traces, errors, declaredPools: lex.declaredPools, syntheticPool };
 }

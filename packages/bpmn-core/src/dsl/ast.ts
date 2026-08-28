@@ -153,6 +153,12 @@ export type Program = {
   errors: DslError[];
   /** Explicit pool→lane declarations from a trailing `== pools ==` block, if any. */
   declaredPools?: DeclaredPool[];
+  /**
+   * True when the DSL named no pool at all and the parser invented one to hang
+   * the nodes off. Such a pool is a parser artifact, not something the author
+   * modelled, so it must not reach the diagram as a swimlane.
+   */
+  syntheticPool?: boolean;
 };
 
 export type FlowNodeKind =
@@ -216,6 +222,8 @@ export type ResolvedModel = {
    * raise POOL_BOUNDARY_CONTROL_FLOW and point the author at a message flow.
    */
   crossPoolControlFlows?: SequenceFlow[];
+  /** See {@link Program.syntheticPool}. */
+  syntheticPool?: boolean;
 };
 
 export type ParseResult = {

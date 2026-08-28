@@ -160,6 +160,30 @@ describe("SVG rendering", () => {
     expect(Number(viewBox?.[4])).toBeGreaterThan(100);
   });
 
+  it("sizes the canvas around auto-placed labels so none is cropped", async () => {
+    // A named start event on the far left has a label wider than its circle and
+    // no DI label box to be measured from. Sizing the canvas to the shapes
+    // alone sliced the first characters off.
+    const { model } = parseDsl("(start Un evento inicial de nombre largo)\nRevisar\n");
+    const layoutXml = await layoutBpmnXml(emitBpmnXml(model));
+    const svg = await renderBpmnSvg(layoutXml);
+
+    const viewBox = /viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/.exec(svg);
+    expect(viewBox).not.toBeNull();
+    const [minX, minY, width, height] = viewBox!.slice(1).map(Number);
+
+    const labels = Array.from(svg.matchAll(/<tspan x="(-?[\d.]+)" y="(-?[\d.]+)">([^<]*)</g));
+    expect(labels.length).toBeGreaterThan(0);
+
+    for (const [, x, y, content] of labels) {
+      const half = measureText(content, 12) / 2;
+      expect(Number(x) - half, content).toBeGreaterThanOrEqual(minX);
+      expect(Number(x) + half, content).toBeLessThanOrEqual(minX + width);
+      expect(Number(y), content).toBeGreaterThanOrEqual(minY);
+      expect(Number(y), content).toBeLessThanOrEqual(minY + height);
+    }
+  });
+
   it("defines the arrowheads its edges reference", async () => {
     const svg = await renderBpmnSvg(await layoutFixture("canon-1-cheeseburger"));
     for (const id of ["bpmn-sequence-end", "bpmn-message-end", "bpmn-message-start"]) {

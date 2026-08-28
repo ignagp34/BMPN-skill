@@ -87,9 +87,19 @@ Read the JSON. Act on it:
   pretending it worked.
 - **`validation.errors` non-empty** — the diagram rendered but is structurally
   wrong. Same retry loop.
-- **`validation.warnings`** — usually cosmetic or informational
-  (`IMPLICIT_START_EVENT`, `LAYOUT_UNREADABLE_LABEL`). Do not retry for these.
-  Mention them only if one materially affects the diagram.
+- **`MISSING_EXPLICIT_START_EVENT` / `MISSING_EXPLICIT_END_EVENT` /
+  `IMPLICIT_START_EVENT` / `IMPLICIT_END_EVENT`** — these say the DSL never
+  named where the process begins or ends, so the engine bolted on anonymous
+  circles. The usual cause is writing `(Something happened)` where the trace
+  should open with `(start Something happened)` or close with
+  `(finish Outcome)`. The result is a diagram with a bare circle in front of
+  your real first event and another after your real last one. Fix the DSL and
+  re-render; do not ship it with the warning.
+- **Other `validation.warnings`** — usually cosmetic
+  (`LAYOUT_UNREADABLE_LABEL` fires for nearly every named event, because the
+  heuristic measures the label against the event's small circle even though it
+  is drawn outside). Do not retry for these. Mention one only if it materially
+  affects the diagram.
 - **`pngNote`** — the PNG was skipped because no system font was found. The SVG
   is still complete; say so and move on.
 
@@ -113,9 +123,13 @@ Sketch Miner notation describes a process as **execution traces**, not as a
 drawing. Each paragraph is one complete path from start to end; blank lines
 separate traces; repeating a task name verbatim across traces is what makes the
 miner infer a gateway, a merge or a loop. You never write gateways yourself.
-`Pool: task` assigns a swimlane, `( )` marks events, `[ ]` data objects, `?`
-labels a decision, `|` splits parallel branches. The full rules, including the
-anti-patterns that produce broken diagrams, are in
+`Pool: task` assigns a swimlane, `( )` marks events, `[ ]` data objects, a line
+ending in `?` labels a decision, `|` splits parallel branches. Two things bite
+often enough to be worth knowing up front: **a colon makes everything before it
+a pool**, so `Gather the input: prose or code` silently creates a swimlane
+called "Gather the input"; and **events need `(start …)` and `(finish …)`**, or
+the engine appends anonymous start and end circles of its own. The full rules,
+including the anti-patterns that produce broken diagrams, are in
 `references/system-prompt-v5.md` — the subagent reads it, you do not need to.
 
 ## Constraints

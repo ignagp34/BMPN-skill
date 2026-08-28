@@ -203,3 +203,19 @@ export function sceneBounds(scene: Scene): Bounds {
   if (!Number.isFinite(minX)) return { x: 0, y: 0, width: 0, height: 0 };
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
+
+/** Smallest box covering `base` and every box in `extra`. */
+export function unionBounds(base: Bounds, extra: Bounds[]): Bounds {
+  if (extra.length === 0) return base;
+  let minX = base.x;
+  let minY = base.y;
+  let maxX = base.x + base.width;
+  let maxY = base.y + base.height;
+  for (const box of extra) {
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}

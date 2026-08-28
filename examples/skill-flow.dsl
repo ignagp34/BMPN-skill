@@ -1,6 +1,6 @@
 /// Flujo de ejecución de la skill /bpmn
 
-(Usuario escribe /bpmn)
+(start Usuario escribe /bpmn)
 Identificar qué se va a modelar
 Reunir el material de entrada
 Lanzar subagente generador de DSL
@@ -12,9 +12,9 @@ Sí
 Escribir SVG, PNG, BPMN y DSL en bpmn-out
 [Diagrama]
 user Mostrar el diagrama al usuario
-(Diagrama entregado)
+(finish Diagrama entregado)
 
-(Usuario escribe /bpmn)
+(start Usuario escribe /bpmn)
 Identificar qué se va a modelar
 Reunir el material de entrada
 Lanzar subagente generador de DSL
@@ -25,7 +25,7 @@ No, quedan reintentos
 Devolver los errores del motor al subagente
 Escribir el DSL Sketch Miner
 
-(Usuario escribe /bpmn)
+(start Usuario escribe /bpmn)
 Identificar qué se va a modelar
 Reunir el material de entrada
 Lanzar subagente generador de DSL

@@ -46,6 +46,33 @@ export function emitBpmnXml(model: ResolvedModel): string {
   const fixed = fixUpEmptyPools(model);
   const participants = groupPools(fixed);
 
+  // A DSL that never names a pool gets one invented for it (see
+  // Program.syntheticPool). Serializing that as a collaboration would put a
+  // participant and a lane called "Pool_1" on the diagram — two header strips
+  // carrying a name the author never wrote. Emit a plain process instead, which
+  // is what a single-participant process without swimlanes actually is.
+  const plainProcess =
+    fixed.syntheticPool === true && participants.length === 1 && fixed.messageFlows.length === 0;
+
+  if (plainProcess) {
+    const root = el(
+      "bpmn:definitions",
+      {
+        "xmlns:bpmn": NS.bpmn,
+        "xmlns:bpmndi": NS.bpmndi,
+        "xmlns:dc": NS.dc,
+        "xmlns:di": NS.di,
+        "xmlns:xsi": NS.xsi,
+        id: "Definitions_1",
+        targetNamespace: "http://bpmn.io/schema/bpmn",
+      },
+      emitProcess(participants[0], fixed, { omitLaneSet: true }),
+    );
+    return `<?xml version="1.0" encoding="UTF-8"?>
+${root}
+`;
+  }
+
   const collaborationBody: string[] = [];
   for (const p of participants) {
     collaborationBody.push(
@@ -298,7 +325,11 @@ function groupPools(model: ResolvedModel): Participant[] {
   return participants;
 }
 
-function emitProcess(p: Participant, model: ResolvedModel): string {
+function emitProcess(
+  p: Participant,
+  model: ResolvedModel,
+  opts: { omitLaneSet?: boolean } = {},
+): string {
   const memberPools = new Set(p.poolNames);
   const nodesInProcess: FlowNode[] = [];
   for (const n of model.flowNodes.values()) {
@@ -417,7 +448,7 @@ function emitProcess(p: Participant, model: ResolvedModel): string {
   }
 
   const body = [
-    laneSet,
+    ...(opts.omitLaneSet === true ? [] : [laneSet]),
     ...nodeXmls,
     ...flowXmls,
     ...annotationXmls,
