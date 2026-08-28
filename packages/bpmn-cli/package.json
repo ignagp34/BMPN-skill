@@ -1,0 +1,17 @@
+{
+  "name": "@text-to-bpmn/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless CLI that turns Sketch Miner DSL (or BPMN XML) into SVG/PNG/BPMN artifacts.",
+  "bin": {
+    "bpmn-render": "./src/main.ts"
+  },
+  "dependencies": {
+    "@text-to-bpmn/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}

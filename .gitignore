@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Generated skill bundle (rebuild with `npm run skill:build`)
+skills/bpmn/bin/*.mjs
+skills/bpmn/bin/*.wasm
+
+# Diagram output
+bpmn-out/
+
+# Environment / secrets
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

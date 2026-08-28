@@ -1,0 +1,26 @@
+{
+  "name": "bpmn-skill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline natural-language → BPMN diagram engine, packaged as a Claude Code skill.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "tsc -b packages/bpmn-core",
+    "skill:build": "node scripts/build-skill.mjs",
+    "skill:install": "node scripts/install-skill.mjs",
+    "render:fidelity": "tsx scripts/render-fidelity.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.3",
+    "playwright": "^1.49.1",
+    "tsx": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
